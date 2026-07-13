@@ -1,0 +1,77 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <RootNamespace>Slicelab</RootNamespace>
+    <AssemblyName>SlicelabTools</AssemblyName>
+    <TargetExt>.gha</TargetExt>
+    <Version>0.27.2</Version>
+    <Title>Slicelab Tools</Title>
+    <Description>Mesh processing, tetrahedral lattice generation, and texture mapping tools for Grasshopper.</Description>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <LangVersion>9.0</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>$(NoWarn);NU1701;CA1416</NoWarn>
+  </PropertyGroup>
+
+  <!-- Optional local build extensions -->
+  <Import Project="Internal\Internal.props" Condition="Exists('Internal\Internal.props')" />
+
+  <ItemGroup>
+    <PackageReference Include="Grasshopper" Version="8.14.24345.15001" ExcludeAssets="runtime" />
+    <PackageReference Include="PdfSharpCore" Version="1.3.*" />
+    <PackageReference Include="System.Drawing.Common" Version="7.0.0" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <!-- Embed component icons as resources -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\*.png" />
+    <EmbeddedResource Include="Resources\*.gif" />
+    <EmbeddedResource Include="Resources\*.obj" />
+  </ItemGroup>
+
+  <!-- Copy pre-built native TetGen library to output -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <None Include="..\..\native\tetgen\build\libTetgenWrapper.dylib"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="TetgenWrapper.dylib"
+          Condition="Exists('..\..\native\tetgen\build\libTetgenWrapper.dylib')" />
+  </ItemGroup>
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <None Include="..\..\native\tetgen\build\Release\TetgenWrapper.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="TetgenWrapper.dll"
+          Condition="Exists('..\..\native\tetgen\build\Release\TetgenWrapper.dll')" />
+  </ItemGroup>
+
+  <!-- Copy pre-built native mmgs library to output -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <None Include="..\..\native\mmg\build\libMmgsWrapper.dylib"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="MmgsWrapper.dylib"
+          Condition="Exists('..\..\native\mmg\build\libMmgsWrapper.dylib')" />
+  </ItemGroup>
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <None Include="..\..\native\mmg\build\Release\MmgsWrapper.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="MmgsWrapper.dll"
+          Condition="Exists('..\..\native\mmg\build\Release\MmgsWrapper.dll')" />
+  </ItemGroup>
+
+  <!-- Copy pre-built native Manifold library to output -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <None Include="..\..\native\manifold\build\libManifoldWrapper.dylib"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="ManifoldWrapper.dylib"
+          Condition="Exists('..\..\native\manifold\build\libManifoldWrapper.dylib')" />
+  </ItemGroup>
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <None Include="..\..\native\manifold\build\Release\ManifoldWrapper.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="ManifoldWrapper.dll"
+          Condition="Exists('..\..\native\manifold\build\Release\ManifoldWrapper.dll')" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,32 @@
+Third-Party Licenses
+====================
+
+Slicelab Tools is licensed under the GNU Affero General Public License v3.0
+(see LICENSE). It uses the following open-source libraries:
+
+
+TetGen 1.5.1 (https://wias-berlin.de/software/tetgen/)
+  Copyright: Hang Si, Weierstrass Institute for Applied Analysis and Stochastics (WIAS), Berlin
+  License: AGPL v3 (TetGen is dual-licensed AGPL v3 / commercial; this project
+           uses it under AGPL v3, which is why Slicelab Tools is AGPL-3.0)
+  Used in: TetgenWrapper.dylib / TetgenWrapper.dll (native shared library, called via P/Invoke)
+
+Tetrino by Tom Svilans (https://github.com/tsvilans/tetrino)
+  License: GPL v3
+  Used in: the TetGen wrapper (native/tetgen/src/) is based on Tetrino's TetGen
+           interop code, adapted for cross-platform use
+
+MMG (https://github.com/MmgTools/mmg)
+  Copyright: Bx INP/Inria/UBordeaux/UPMC, 2004-
+  License: LGPL v3
+  Used in: MmgsWrapper.dylib / MmgsWrapper.dll (native shared library, called via P/Invoke)
+
+Manifold (https://github.com/elalish/manifold)
+  Copyright: The Manifold Authors
+  License: Apache 2.0
+  Used in: ManifoldWrapper.dylib / ManifoldWrapper.dll (native shared library, called via P/Invoke)
+
+PdfSharpCore (https://github.com/ststeiger/PdfSharpCore)
+  Copyright: Stefan Steiger, empira Software GmbH
+  License: MIT
+  Used in: PDF Export components (NuGet package, bundled in .gha)

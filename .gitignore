@@ -1,0 +1,28 @@
+# Build artifacts — anchored to our project so vendored native sources are untouched
+/src/Slicelab/bin/
+/src/Slicelab/obj/
+*.user
+native/*/build/
+
+# Internal components (nested private repo)
+src/Slicelab/Internal/
+
+# Private local notes and instructions
+CLAUDE.local.md
+CLAUDE.md
+MEMORY.md
+.claude/
+
+# Local working folders (root only)
+/checkpoints/
+/dist/
+/docs/
+
+# Yak packaging — binaries in, package out; sources are tracked, artifacts are not
+/yak/win-libs/
+/yak/dist/
+/yak/*.yak
+
+# OS
+.DS_Store
+Thumbs.db

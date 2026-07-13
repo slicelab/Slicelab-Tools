@@ -1,0 +1,25 @@
+---
+name: SlicelabTools
+version: {{VERSION}}
+authors:
+  - Arthur Azoulai
+description: >
+  Grasshopper tools for additive manufacturing: tetrahedral meshing (TetGen, MMG3D),
+  lattice generation, mesh booleans and simplification (Manifold), adaptive remeshing
+  (MMGS), PDF layout export, and mesh/geometry utilities.
+
+  Requires Rhino 8 or later. On Windows, Rhino must be running the .NET Core runtime:
+  run the SetDotNetRuntime command, choose NETCore, and restart Rhino. Otherwise the
+  plug-in will not load.
+url: https://github.com/slicelab/Slicelab-Tools
+icon: icon.png
+keywords:
+  - grasshopper
+  - lattice
+  - tetrahedral
+  - tetgen
+  - mesh
+  - remesh
+  - boolean
+  - additive-manufacturing
+  - 3d-printing
