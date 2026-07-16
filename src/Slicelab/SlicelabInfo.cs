@@ -28,7 +28,9 @@ namespace Slicelab
         public override Bitmap Icon => IconHelper.LoadIconRaw("SL-Tab.png");
         public override string AuthorName => "Arthur Azoulai";
         public override string AuthorContact => "";
-        public override string Version => "0.1.0";
-        public override GH_LibraryLicense License => GH_LibraryLicense.unset;
+        // Derived from the csproj <Version> so it can never drift again (was hardcoded "0.1.0" since v0.1.0)
+        public override string Version =>
+            typeof(SlicelabInfo).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+        public override GH_LibraryLicense License => GH_LibraryLicense.opensource;
     }
 }
