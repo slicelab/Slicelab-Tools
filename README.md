@@ -1,8 +1,8 @@
 # Slicelab Tools
 
-A Grasshopper plugin for Rhino 8 — mesh processing, tetrahedral meshing and lattice generation, texture mapping, visualization, PDF layout, and file export.
+**🌐 [tools.slicelab.com](https://tools.slicelab.com)** — documentation, examples, and every component's inputs/outputs.
 
-**📖 Documentation: [slicelab-gh-tools-docs.vercel.app](https://slicelab-gh-tools-docs.vercel.app/)**
+A Grasshopper plugin for Rhino 8 — mesh processing, tetrahedral meshing and lattice generation, texture mapping, visualization, PDF layout, and file export.
 
 Cross-platform: macOS (Apple Silicon) and Windows 11 · .NET 7 · AGPL-3.0
 
@@ -12,18 +12,20 @@ Cross-platform: macOS (Apple Silicon) and Windows 11 · .NET 7 · AGPL-3.0
 |---|---|
 | **Geometry** | Mesh booleans (Manifold), Adaptive TriRemesh (mmg), decimate, refine, repair, bounding box, curve utilities |
 | **Geometry Viz** | Attractor field rendering, texture mapping, gradient legends |
-| **Tet Tools** | Tetrahedralize (TetGen + MMG3D) and 10 lattice generators |
+| **Tet Tools** | Tetrahedralize (TetGen) and 10 lattice generators |
 | **PDF** | Composable multi-page PDF layout + quick export |
 | **Export** | STL, 3MF, GLB (Draco), TXT, viewport/render capture |
 | **Utilities** | Data flow, text, layers, unit conversion, math |
 
-See the [documentation site](https://slicelab-gh-tools-docs.vercel.app/) for every component, inputs/outputs, and usage.
+See [tools.slicelab.com](https://tools.slicelab.com) for every component, inputs/outputs, and usage.
 
 ## Install
 
-1. Copy `SlicelabTools.gha` and the native libraries (`TetgenWrapper`, `MmgsWrapper`, `ManifoldWrapper` — `.dylib` on macOS / `.dll` on Windows) into your Grasshopper Libraries folder
-2. **Windows only:** Rhino must use the NETCore runtime — run `SetDotNetRuntime`, select **NETCore**, restart Rhino
-3. Restart Rhino
+**Package Manager (recommended):** in Rhino 8, run `_PackageManager`, search **SlicelabTools**, install, restart Rhino.
+
+**Manual:** download the platform zip from [Releases](https://github.com/slicelab/Slicelab-Tools/releases) and unzip its entire contents into your Grasshopper Libraries folder, then restart Rhino.
+
+**Windows only (both methods):** Rhino must use the NETCore runtime — run `SetDotNetRuntime`, select **NETCore**, restart Rhino. Without this the plug-in silently won't load.
 
 ## Build from source
 

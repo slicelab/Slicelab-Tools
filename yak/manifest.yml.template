@@ -11,7 +11,7 @@ description: >
   Requires Rhino 8 or later. On Windows, Rhino must be running the .NET Core runtime:
   run the SetDotNetRuntime command, choose NETCore, and restart Rhino. Otherwise the
   plug-in will not load.
-url: https://github.com/slicelab/Slicelab-Tools
+url: https://tools.slicelab.com
 icon: icon.png
 keywords:
   - grasshopper
