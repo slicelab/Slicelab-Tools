@@ -1,0 +1,20 @@
+name: build
+
+# Verifies the public build compiles from a clean clone.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  public-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '7.0.x'
+
+      - name: Build (Release)
+        run: dotnet build src/Slicelab/Slicelab.csproj --configuration Release
