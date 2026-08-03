@@ -5,7 +5,7 @@
     <RootNamespace>Slicelab</RootNamespace>
     <AssemblyName>SlicelabTools</AssemblyName>
     <TargetExt>.gha</TargetExt>
-    <Version>0.27.2</Version>
+    <Version>0.28.0</Version>
     <Title>Slicelab Tools</Title>
     <Description>Mesh processing, tetrahedral lattice generation, and texture mapping tools for Grasshopper.</Description>
     <EnableDynamicLoading>true</EnableDynamicLoading>
