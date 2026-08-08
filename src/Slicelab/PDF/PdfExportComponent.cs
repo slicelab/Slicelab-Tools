@@ -18,7 +18,7 @@ namespace Slicelab.PDF
     {
         public PdfExportComponent()
             : base("PDF Quick Export", "SLPdfQ",
-                "Export closed planar curves to a PDF with fill and stroke colors. Page size is auto-computed from curve bounding box. Even-odd fill rule handles nested shapes.",
+                "Export planar curves to a PDF with fill and stroke colors. Closed curves can be filled; open curves are stroked. Page size is auto-computed from curve bounding box. Even-odd fill rule handles nested shapes.",
                 "Slicelab Tools", "PDF")
         { }
 
@@ -28,14 +28,15 @@ namespace Slicelab.PDF
 
         protected override void RegisterInputParams(GH_InputParamManager pManager)
         {
-            pManager.AddGeometryParameter("Geometry", "G", "Closed planar curves, surfaces, or breps (DataTree: one branch = one shape group). Breps/surfaces are converted to boundary curves automatically.", GH_ParamAccess.tree);
+            pManager.AddGeometryParameter("Geometry", "G", "Planar curves (open or closed), surfaces, or breps (DataTree: one branch = one shape group). Breps/surfaces are converted to boundary curves automatically.", GH_ParamAccess.tree);
             pManager.AddTextParameter("File Name", "N", "Output file name (without extension)", GH_ParamAccess.item);
             pManager.AddTextParameter("File Path", "F", "Output folder", GH_ParamAccess.item);
-            pManager.AddColourParameter("Fill Color", "FC", "Fill color per branch (matched by tree path)", GH_ParamAccess.tree);
-            pManager.AddColourParameter("Stroke Color", "SC", "Stroke color per branch (optional, matched by tree path)", GH_ParamAccess.tree);
-            pManager.AddNumberParameter("Stroke Weight", "SW", "Stroke weight per branch in points (optional, matched by tree path)", GH_ParamAccess.tree);
+            pManager.AddColourParameter("Fill Color", "FC", "Fill color per branch (optional if a stroke is supplied, matched by tree path)", GH_ParamAccess.tree);
+            pManager.AddColourParameter("Stroke Color", "SC", "Stroke color per branch (optional, matched by tree path). Supplied on its own, defaults to a 1pt weight.", GH_ParamAccess.tree);
+            pManager.AddNumberParameter("Stroke Weight", "SW", "Stroke weight per branch in points (optional, matched by tree path). Supplied on its own, defaults to a black stroke.", GH_ParamAccess.tree);
             pManager.AddBooleanParameter("Save", "Sa", "Set to true to save PDF", GH_ParamAccess.item, false);
 
+            pManager[3].Optional = true;
             pManager[4].Optional = true;
             pManager[5].Optional = true;
         }
@@ -48,6 +49,8 @@ namespace Slicelab.PDF
 
         protected override void SolveInstance(IGH_DataAccess DA)
         {
+            Message = null;
+
             GH_Structure<IGH_GeometricGoo> geoTree = null;
             string fileName = "";
             string filePath = "";
@@ -63,6 +66,11 @@ namespace Slicelab.PDF
             DA.GetDataTree(4, out strokeTree);
             DA.GetDataTree(5, out weightTree);
             DA.GetData(6, ref save);
+
+            // Report the styling default before anything can return early, so the note under the
+            // component reflects the wiring rather than whether an export just ran.
+            if (PdfLayoutHelper.NoStyleSupplied(fillTree, strokeTree, weightTree))
+                Message = "default: 1pt black line";
 
             if (!save)
             {
@@ -120,14 +128,32 @@ namespace Slicelab.PDF
                 foreach (var ghCrv2 in branch)
                 {
                     Curve crv = ghCrv2?.Value;
-                    if (crv == null || !crv.IsClosed || !crv.IsPlanar()) continue;
+                    if (crv == null || !crv.IsPlanar()) continue;
                     bbox.Union(crv.GetBoundingBox(true));
                 }
             }
 
-            if (!bbox.IsValid || bbox.Diagonal.X < 1e-10 || bbox.Diagonal.Y < 1e-10)
+            // The page is sized from the bounding box, so an extent of zero in either axis would
+            // produce a degenerate page. Name the axis — "invalid bounding box" leaves the user guessing.
+            bool flatX = bbox.Diagonal.X < 1e-10;
+            bool flatY = bbox.Diagonal.Y < 1e-10;
+
+            if (!bbox.IsValid || (flatX && flatY))
             {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Curves have zero or invalid bounding box extent.");
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
+                    "All geometry collapses to a single point — there is nothing to lay out on a page.");
+                return;
+            }
+            if (flatY)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
+                    "All geometry lies on a single horizontal line, so the page would have no height. Add geometry with vertical extent, or use PDF Flat Geometry to place this line in a page layout.");
+                return;
+            }
+            if (flatX)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
+                    "All geometry lies on a single vertical line, so the page would have no width. Add geometry with horizontal extent, or use PDF Flat Geometry to place this line in a page layout.");
                 return;
             }
 
@@ -147,6 +173,10 @@ namespace Slicelab.PDF
             page.Height = XUnit.FromPoint(pageHeight);
             var gfx = XGraphics.FromPdfPage(page);
 
+            bool usedDefaultStyle = false;
+            int skipped = 0;
+            double curveTolerance = doc != null ? doc.ModelAbsoluteTolerance : 0.001;
+
             for (int i = 0; i < curveTree.Branches.Count; i++)
             {
                 var branch = curveTree.Branches[i];
@@ -154,18 +184,9 @@ namespace Slicelab.PDF
 
                 GH_Path curvePath = curveTree.Paths[i];
 
-                // Match fill color by tree path, fallback to sequential index, then default
-                Color fill = GetColorFromTree(fillTree, curvePath, i, Color.Black);
-
-                // Match stroke color by tree path (optional)
-                Color? stroke = null;
-                if (strokeTree != null && strokeTree.DataCount > 0)
-                    stroke = GetColorFromTree(strokeTree, curvePath, i, Color.Black);
-
-                // Match stroke weight by tree path (optional)
-                double strokeWeight = 0;
-                if (weightTree != null && weightTree.DataCount > 0)
-                    strokeWeight = GetNumberFromTree(weightTree, curvePath, i, 0);
+                // Fill, stroke, or both — resolved by the shared rule in PdfLayoutHelper
+                var style = PdfLayoutHelper.ResolveBranchStyle(fillTree, strokeTree, weightTree, curvePath, i);
+                if (style.UsedDefault) usedDefaultStyle = true;
 
                 // Build combined XGraphicsPath with StartFigure/CloseFigure for even-odd fill
                 var path = new XGraphicsPath();
@@ -174,48 +195,40 @@ namespace Slicelab.PDF
                 foreach (var ghCrv in branch)
                 {
                     Curve crv = ghCrv?.Value;
-                    if (crv == null || !crv.IsClosed || !crv.IsPlanar()) continue;
+                    if (crv == null || !crv.IsPlanar()) { skipped++; continue; }
 
-                    Polyline polyline;
-                    if (!crv.TryGetPolyline(out polyline))
-                    {
-                        double tolerance = doc != null ? doc.ModelAbsoluteTolerance : 0.001;
-                        PolylineCurve plc = crv.ToPolyline(tolerance, RhinoMath.ToRadians(1.0), 0, 0);
-                        if (plc == null || !plc.TryGetPolyline(out polyline)) continue;
-                    }
-
-                    if (polyline.Count < 3) continue;
-
-                    // Close if needed
-                    if (polyline[0].DistanceTo(polyline[polyline.Count - 1]) > 1e-6)
-                        polyline.Add(polyline[0]);
-
-                    // Convert to PDF coordinates
-                    var pdfPts = new XPoint[polyline.Count];
-                    for (int j = 0; j < polyline.Count; j++)
-                    {
-                        pdfPts[j] = new XPoint(
-                            (polyline[j].X - bbox.Min.X) * unitScale,
-                            (bbox.Max.Y - polyline[j].Y) * unitScale);
-                    }
+                    var polyline = PdfLayoutHelper.CurveToPolyline(crv, curveTolerance, out bool closed);
+                    if (polyline == null) { skipped++; continue; }
 
                     path.StartFigure();
-                    path.AddLines(pdfPts);
-                    path.CloseFigure();
+                    path.AddLines(PdfLayoutHelper.PolylineToXPoints(polyline, bbox, unitScale));
+                    // Only seal closed shapes — an open curve must stay open so its stroke
+                    // does not draw a phantom segment back to the start point.
+                    if (closed) path.CloseFigure();
                 }
 
-                // Draw the path
-                var xFill = new XSolidBrush(XColor.FromArgb(fill.A, fill.R, fill.G, fill.B));
-                if (stroke.HasValue && strokeWeight > 0)
-                {
-                    var sc = stroke.Value;
-                    var xPen = new XPen(XColor.FromArgb(sc.A, sc.R, sc.G, sc.B), strokeWeight);
-                    gfx.DrawPath(xPen, xFill, path);
-                }
-                else
-                {
-                    gfx.DrawPath(xFill, path);
-                }
+                // Draw the path — fill, stroke, or both
+                bool hasFill = style.Fill.HasValue;
+                bool hasStroke = style.Stroke.HasValue && style.StrokeWeight > 0;
+
+                if (hasFill && hasStroke)
+                    gfx.DrawPath(new XPen(style.Stroke.Value, style.StrokeWeight), new XSolidBrush(style.Fill.Value), path);
+                else if (hasFill)
+                    gfx.DrawPath(new XSolidBrush(style.Fill.Value), path);
+                else if (hasStroke)
+                    gfx.DrawPath(new XPen(style.Stroke.Value, style.StrokeWeight), path);
+            }
+
+            if (usedDefaultStyle)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                    "No Fill Color, Stroke Color or Stroke Weight supplied — defaulted to a 1pt black line.");
+            }
+
+            if (skipped > 0)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                    $"{skipped} curve(s) skipped — not planar, or too few points to draw.");
             }
 
             // Save
@@ -230,45 +243,5 @@ namespace Slicelab.PDF
             DA.SetData(1, $"Saved PDF: {pageWidth:F1} x {pageHeight:F1} pt ({curveTree.Branches.Count} branches, {curveTree.DataCount} curves)");
         }
 
-        /// <summary>
-        /// Get a color from a tree, matching by path first, then falling back to sequential index, then first branch.
-        /// </summary>
-        private static Color GetColorFromTree(GH_Structure<GH_Colour> tree, GH_Path targetPath, int branchIndex, Color fallback)
-        {
-            if (tree == null || tree.DataCount == 0) return fallback;
-
-            // Try exact path match
-            var list = tree[targetPath];
-            if (list != null && list.Count > 0) return list[0].Value;
-
-            // Fallback to sequential index
-            if (branchIndex < tree.Branches.Count && tree.Branches[branchIndex].Count > 0)
-                return tree.Branches[branchIndex][0].Value;
-
-            // Fallback to first branch
-            if (tree.Branches.Count > 0 && tree.Branches[0].Count > 0)
-                return tree.Branches[0][0].Value;
-
-            return fallback;
-        }
-
-        /// <summary>
-        /// Get a number from a tree, matching by path first, then falling back to sequential index, then first branch.
-        /// </summary>
-        private static double GetNumberFromTree(GH_Structure<GH_Number> tree, GH_Path targetPath, int branchIndex, double fallback)
-        {
-            if (tree == null || tree.DataCount == 0) return fallback;
-
-            var list = tree[targetPath];
-            if (list != null && list.Count > 0) return list[0].Value;
-
-            if (branchIndex < tree.Branches.Count && tree.Branches[branchIndex].Count > 0)
-                return tree.Branches[branchIndex][0].Value;
-
-            if (tree.Branches.Count > 0 && tree.Branches[0].Count > 0)
-                return tree.Branches[0][0].Value;
-
-            return fallback;
-        }
     }
 }

@@ -15,6 +15,7 @@ namespace Slicelab
                 Instances.ComponentServer.AddCategoryIcon("Slicelab Tools", tabIcon);
 
             PdfFontResolver.Register();
+            PdfImageSource.Register();
 
             return GH_LoadingInstruction.Proceed;
         }

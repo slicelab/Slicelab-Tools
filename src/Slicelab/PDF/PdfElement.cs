@@ -114,7 +114,7 @@ namespace Slicelab.PDF
             }
             catch (Exception ex)
             {
-                LastError = $"MeasureHeight failed for '{ImagePath}': {ex.Message}";
+                LastError = $"MeasureHeight failed for '{ImagePath}': {PdfImageSource.Describe(ex)}";
                 return 0;
             }
         }
@@ -138,13 +138,13 @@ namespace Slicelab.PDF
             }
             catch (Exception ex)
             {
-                LastError = $"Draw failed for '{ImagePath}': {ex.Message}";
+                LastError = $"Draw failed for '{ImagePath}': {PdfImageSource.Describe(ex)}";
                 try
                 {
                     var font = new XFont("Arial", 8, XFontStyle.Italic);
                     var tf = new XTextFormatter(gfx);
                     var errorRect = new XRect(x, y, columnWidth, 60);
-                    tf.DrawString($"[Image error: {ex.Message}]", font,
+                    tf.DrawString($"[Image error: {PdfImageSource.Describe(ex)}]", font,
                         XBrushes.Red, errorRect,
                         new TextFormatAlignment { Horizontal = XParagraphAlignment.Left });
                 }
@@ -155,10 +155,17 @@ namespace Slicelab.PDF
 
     // ─── Geometry ────────────────────────────────────────────────
 
+    /// <summary>A polyline destined for the PDF, carrying whether the source curve was closed.</summary>
+    public class GeoPolyline
+    {
+        public XPoint[] Points { get; set; }
+        public bool Closed { get; set; }
+    }
+
     public class GeoBranch
     {
-        public XPoint[][] Polylines { get; set; }
-        public XColor FillColor { get; set; }
+        public GeoPolyline[] Polylines { get; set; }
+        public XColor? FillColor { get; set; }
         public XColor? StrokeColor { get; set; }
         public double StrokeWeight { get; set; }
     }
@@ -192,9 +199,10 @@ namespace Slicelab.PDF
                 var path = new XGraphicsPath();
                 path.FillMode = XFillMode.Alternate;
 
-                foreach (var pts in branch.Polylines)
+                foreach (var pl in branch.Polylines)
                 {
-                    if (pts == null || pts.Length < 3) continue;
+                    var pts = pl?.Points;
+                    if (pts == null || pts.Length < 2) continue;
 
                     // Scale and translate points into draw rect
                     var scaled = new XPoint[pts.Length];
@@ -207,18 +215,27 @@ namespace Slicelab.PDF
 
                     path.StartFigure();
                     path.AddLines(scaled);
-                    path.CloseFigure();
+                    // Only seal closed shapes — an open curve must stay open so its stroke
+                    // does not draw a phantom segment back to the start point.
+                    if (pl.Closed) path.CloseFigure();
                 }
 
-                var fillBrush = new XSolidBrush(branch.FillColor);
-                if (branch.StrokeColor.HasValue && branch.StrokeWeight > 0)
+                bool hasFill = branch.FillColor.HasValue;
+                bool hasStroke = branch.StrokeColor.HasValue && branch.StrokeWeight > 0;
+
+                if (hasFill && hasStroke)
                 {
                     var pen = new XPen(branch.StrokeColor.Value, branch.StrokeWeight);
-                    gfx.DrawPath(pen, fillBrush, path);
+                    gfx.DrawPath(pen, new XSolidBrush(branch.FillColor.Value), path);
                 }
-                else
+                else if (hasFill)
                 {
-                    gfx.DrawPath(fillBrush, path);
+                    gfx.DrawPath(new XSolidBrush(branch.FillColor.Value), path);
+                }
+                else if (hasStroke)
+                {
+                    var pen = new XPen(branch.StrokeColor.Value, branch.StrokeWeight);
+                    gfx.DrawPath(pen, path);
                 }
             }
         }
@@ -388,7 +405,7 @@ namespace Slicelab.PDF
                 {
                     var font = new XFont("Arial", 8, XFontStyle.Italic);
                     var tf = new XTextFormatter(gfx);
-                    tf.DrawString($"[Viewport capture error: {ex.Message}]", font,
+                    tf.DrawString($"[Viewport capture error: {PdfImageSource.Describe(ex)}]", font,
                         XBrushes.Red, new XRect(x, y, columnWidth, 60),
                         new TextFormatAlignment { Horizontal = XParagraphAlignment.Left });
                 }

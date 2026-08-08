@@ -112,21 +112,25 @@ namespace Slicelab.PDF
             }
         }
 
-        public static Polyline CurveToPolyline(Curve crv, double tolerance)
+        /// <summary>
+        /// Convert a curve to a polyline. Closed curves are sealed and need at least 3 points;
+        /// open curves are left open and need only 2, so a single straight segment survives.
+        /// </summary>
+        public static Polyline CurveToPolyline(Curve crv, double tolerance, out bool closed)
         {
-            if (crv.TryGetPolyline(out Polyline polyline))
+            closed = crv.IsClosed;
+            int minPoints = closed ? 3 : 2;
+
+            if (crv.TryGetPolyline(out Polyline polyline) && polyline.Count >= minPoints)
             {
-                if (polyline.Count >= 3)
-                {
-                    ClosePolyline(ref polyline);
-                    return polyline;
-                }
+                if (closed) ClosePolyline(ref polyline);
+                return polyline;
             }
 
             var plc = crv.ToPolyline(tolerance, RhinoMath.ToRadians(1.0), 0, 0);
-            if (plc != null && plc.TryGetPolyline(out polyline) && polyline.Count >= 3)
+            if (plc != null && plc.TryGetPolyline(out polyline) && polyline.Count >= minPoints)
             {
-                ClosePolyline(ref polyline);
+                if (closed) ClosePolyline(ref polyline);
                 return polyline;
             }
 
@@ -151,17 +155,160 @@ namespace Slicelab.PDF
             return pts;
         }
 
-        public static XGraphicsPath BuildGraphicsPath(List<XPoint[]> polylines)
+        // ─── Branch styling ──────────────────────────────────────
+
+        /// <summary>Default stroke weight in points, used when a stroke is implied but no weight is given.</summary>
+        public const double DefaultStrokeWeight = 1.0;
+
+        /// <summary>Resolved fill/stroke styling for one geometry branch. Either may be null, never both.</summary>
+        public class BranchStyle
+        {
+            public XColor? Fill { get; set; }
+            public XColor? Stroke { get; set; }
+            public double StrokeWeight { get; set; }
+            /// <summary>True when no colors were supplied and the black-outline default was applied.</summary>
+            public bool UsedDefault { get; set; }
+        }
+
+        /// <summary>
+        /// Resolve fill and stroke for one branch. Supply a fill, a stroke, or both — with nothing
+        /// supplied the branch falls back to a 1pt black outline so geometry always renders.
+        /// </summary>
+        public static BranchStyle ResolveBranchStyle(
+            GH_Structure<GH_Colour> fillTree,
+            GH_Structure<GH_Colour> strokeTree,
+            GH_Structure<GH_Number> weightTree,
+            GH_Path targetPath,
+            int branchIndex)
+        {
+            bool hasFill = fillTree != null && fillTree.DataCount > 0;
+            bool hasStrokeColor = strokeTree != null && strokeTree.DataCount > 0;
+            bool hasStrokeWeight = weightTree != null && weightTree.DataCount > 0;
+
+            var style = new BranchStyle();
+
+            if (hasFill)
+            {
+                var fill = GetColorFromTree(fillTree, targetPath, branchIndex, System.Drawing.Color.Black);
+                style.Fill = ToXColor(fill);
+            }
+
+            if (hasStrokeColor || hasStrokeWeight)
+            {
+                // A weight was given explicitly: honour it, including a deliberate 0 meaning "no stroke"
+                // (that is how v0.27.2 behaved). With no weight given, a supplied color implies 1pt.
+                double weight = hasStrokeWeight
+                    ? GetNumberFromTree(weightTree, targetPath, branchIndex, DefaultStrokeWeight)
+                    : DefaultStrokeWeight;
+
+                if (weight > 0)
+                {
+                    var stroke = hasStrokeColor
+                        ? GetColorFromTree(strokeTree, targetPath, branchIndex, System.Drawing.Color.Black)
+                        : System.Drawing.Color.Black;
+                    style.Stroke = ToXColor(stroke);
+                    style.StrokeWeight = weight;
+                }
+            }
+
+            // Nothing resolved to anything visible — fall back to a black outline rather than
+            // silently dropping the branch.
+            if (!style.Fill.HasValue && !style.Stroke.HasValue)
+            {
+                style.Stroke = XColors.Black;
+                style.StrokeWeight = DefaultStrokeWeight;
+                style.UsedDefault = true;
+            }
+
+            return style;
+        }
+
+        /// <summary>
+        /// True when none of the three style inputs carry data, i.e. the black-line default applies.
+        /// Answerable from the input trees alone, so it can be reported before any geometry work.
+        /// </summary>
+        public static bool NoStyleSupplied(
+            GH_Structure<GH_Colour> fillTree,
+            GH_Structure<GH_Colour> strokeTree,
+            GH_Structure<GH_Number> weightTree)
+        {
+            return (fillTree == null || fillTree.DataCount == 0)
+                && (strokeTree == null || strokeTree.DataCount == 0)
+                && (weightTree == null || weightTree.DataCount == 0);
+        }
+
+        /// <summary>
+        /// Heaviest stroke that could be drawn, in points — used to pad a bounding box that is
+        /// degenerate in one axis, since a stroke occupies width the geometry itself does not.
+        /// </summary>
+        public static double MaxStrokeWeight(GH_Structure<GH_Number> weightTree)
+        {
+            double max = 0;
+            if (weightTree != null)
+            {
+                foreach (var branch in weightTree.Branches)
+                    foreach (var n in branch)
+                        if (n != null && n.Value > max) max = n.Value;
+            }
+            return max > 0 ? max : DefaultStrokeWeight;
+        }
+
+        public static XColor ToXColor(System.Drawing.Color c)
+        {
+            return XColor.FromArgb(c.A, c.R, c.G, c.B);
+        }
+
+        /// <summary>
+        /// Get a color from a tree, matching by path first, then falling back to sequential index, then first branch.
+        /// </summary>
+        public static System.Drawing.Color GetColorFromTree(GH_Structure<GH_Colour> tree, GH_Path targetPath, int branchIndex, System.Drawing.Color fallback)
+        {
+            if (tree == null || tree.DataCount == 0) return fallback;
+
+            var list = tree[targetPath];
+            if (list != null && list.Count > 0) return list[0].Value;
+
+            if (branchIndex < tree.Branches.Count && tree.Branches[branchIndex].Count > 0)
+                return tree.Branches[branchIndex][0].Value;
+
+            if (tree.Branches.Count > 0 && tree.Branches[0].Count > 0)
+                return tree.Branches[0][0].Value;
+
+            return fallback;
+        }
+
+        /// <summary>
+        /// Get a number from a tree, matching by path first, then falling back to sequential index, then first branch.
+        /// </summary>
+        public static double GetNumberFromTree(GH_Structure<GH_Number> tree, GH_Path targetPath, int branchIndex, double fallback)
+        {
+            if (tree == null || tree.DataCount == 0) return fallback;
+
+            var list = tree[targetPath];
+            if (list != null && list.Count > 0) return list[0].Value;
+
+            if (branchIndex < tree.Branches.Count && tree.Branches[branchIndex].Count > 0)
+                return tree.Branches[branchIndex][0].Value;
+
+            if (tree.Branches.Count > 0 && tree.Branches[0].Count > 0)
+                return tree.Branches[0][0].Value;
+
+            return fallback;
+        }
+
+        public static XGraphicsPath BuildGraphicsPath(List<GeoPolyline> polylines)
         {
             var path = new XGraphicsPath();
             path.FillMode = XFillMode.Alternate;
 
-            foreach (var pts in polylines)
+            foreach (var pl in polylines)
             {
-                if (pts == null || pts.Length < 3) continue;
+                if (pl?.Points == null || pl.Points.Length < 2) continue;
                 path.StartFigure();
-                path.AddLines(pts);
-                path.CloseFigure();
+                path.AddLines(pl.Points);
+                // Only seal closed shapes — an open curve must stay open so its stroke
+                // does not draw a phantom segment back to the start point.
+                if (pl.Closed) path.CloseFigure();
             }
 
             return path;
