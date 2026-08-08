@@ -110,22 +110,37 @@ ok "manifest.yml (version $VERSION)"
 
 cd "$STAGE"
 "$YAK" build
-mv ./*.yak "$ROOT/yak/" 2>/dev/null || true
+
+# Identify the package we just built by name. Globbing the yak/ folder instead would
+# pick up packages from previous releases — and since yak publishes are irreversible,
+# the printed commands must name one exact file rather than a pattern.
+BUILT="$(ls -t ./*.yak 2>/dev/null | head -1)"
+[ -n "$BUILT" ] || fail "yak build produced no .yak file in $STAGE"
+
+PKG_NAME="$(basename "$BUILT")"
+mv "$BUILT" "$ROOT/yak/$PKG_NAME"
+
+case "$PKG_NAME" in
+  *"$VERSION"*) ;;
+  *) fail "built package '$PKG_NAME' does not carry version $VERSION — check manifest.yml" ;;
+esac
 
 echo
-printf '\033[32mDone.\033[0m Package: %s\n' "$(ls "$ROOT"/yak/*.yak 2>/dev/null | head -1)"
-cat <<'EOF'
+printf '\033[32mDone.\033[0m Package: %s\n' "$ROOT/yak/$PKG_NAME"
+
+# Unquoted heredoc so the filename expands; \$YAK stays literal for copy-paste.
+cat <<EOF
 
 Next — publish (test server first, it resets daily and mistakes are free):
 
   YAK="/Applications/Rhino 8.app/Contents/Resources/bin/yak"
-  "$YAK" login
-  "$YAK" push --source https://test.yak.rhino3d.com yak/SlicelabTools-*.yak
+  "\$YAK" login
+  "\$YAK" push --source https://test.yak.rhino3d.com yak/$PKG_NAME
 
 Install it in Rhino from the test server, verify a TetGen, an mmg, and a Manifold
 component all compute on BOTH Mac and Windows. Only then:
 
-  "$YAK" push yak/SlicelabTools-*.yak
+  "\$YAK" push yak/$PKG_NAME
 
 WARNING: published versions can never be deleted or overwritten — only yanked
 (unlisted). And the first push of a package name owns that name forever.
