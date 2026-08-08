@@ -23,6 +23,9 @@ MEMORY.md
 /yak/dist/
 /yak/*.yak
 
+# yak 
+.mcneel/
+
 # OS
 .DS_Store
 Thumbs.db
